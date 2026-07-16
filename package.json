@@ -2,10 +2,10 @@
   "name": "nar",
   "version": "1.0.0",
   "description": "Live NAR audio recorder, level meter, and archive browser",
-  "main": "test.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node test.js",
-    "start:live": "node test.js",
+    "start": "node server.js",
+    "start:live": "node server.js",
     "start:archive": "node server.js"
   },
   "keywords": [],

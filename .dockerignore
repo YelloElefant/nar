@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log
+live-levels
+.env
+.git
+.gitignore
+2026-07-15_08-44-56-798823.mp4
+test.wav
+test.peaks.json
+test.py

@@ -1,0 +1,14 @@
+services:
+  nar-live:
+    build:
+      context: .
+    container_name: nar-live
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      LEVEL_DIR: /data/live-levels
+    volumes:
+      - ./live-levels:/data/live-levels

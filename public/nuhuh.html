@@ -1,0 +1,527 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>nar · scope</title>
+<style>
+    :root {
+        --bg: #16181c;
+        --panel: #1d2026;
+        --gap: #24272e;
+        --ink: #c9cdd4;
+        --dim: #6b7280;
+        /* sodium-amber: the colour of the gear this audio came off */
+        --hot: #ffb545;
+        --warm: #7a5a2c;
+        --head: #ff4d4d;
+        --line: #333842;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--ink);
+        font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    header {
+        display: flex;
+        align-items: baseline;
+        gap: 18px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+    }
+
+    #clock {
+        font-size: 26px;
+        letter-spacing: 0.02em;
+    }
+
+    #view {
+        color: var(--dim);
+    }
+
+    .spacer {
+        flex: 1;
+    }
+
+    .load {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    label.file {
+        background: var(--gap);
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        padding: 5px 10px;
+        cursor: pointer;
+        color: var(--ink);
+        white-space: nowrap;
+    }
+
+    label.file:hover {
+        border-color: var(--warm);
+    }
+
+    label.file.set {
+        border-color: var(--hot);
+        color: var(--hot);
+    }
+
+    label.file input {
+        display: none;
+    }
+
+    #tl {
+        width: 100%;
+        height: 200px;
+        display: block;
+        background: var(--panel);
+        border-radius: 4px;
+        cursor: crosshair;
+        touch-action: none;
+        margin-top: 4px;
+    }
+
+    #empty {
+        height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--dim);
+        background: var(--panel);
+        border-radius: 4px;
+        margin-top: 4px;
+        text-align: center;
+    }
+
+    .controls {
+        display: flex;
+        gap: 26px;
+        margin: 14px 0;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .ctl {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 150px;
+    }
+
+    .ctl .row {
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .ctl .k {
+        color: var(--dim);
+    }
+
+    .ctl .v {
+        color: var(--hot);
+    }
+
+    input[type=range] {
+        accent-color: var(--hot);
+        width: 100%;
+    }
+
+    .stats {
+        display: flex;
+        gap: 28px;
+        flex-wrap: wrap;
+        margin: 6px 0 14px;
+        padding: 12px 14px;
+        background: var(--panel);
+        border-radius: 4px;
+    }
+
+    .stat .n {
+        font-size: 20px;
+        color: var(--hot);
+    }
+
+    .stat .l {
+        color: var(--dim);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    #hint {
+        color: var(--dim);
+        margin: 8px 0 12px;
+    }
+
+    audio {
+        width: 100%;
+        margin-top: 4px;
+    }
+
+    kbd {
+        background: var(--gap);
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        padding: 1px 5px;
+        color: var(--ink);
+    }
+</style>
+
+<header>
+    <div id="clock">--:--:--</div>
+    <div id="view"></div>
+    <div class="spacer"></div>
+    <div class="load">
+        <label class="file" id="lblPeaks">peaks.json<input type="file" id="fPeaks"
+                accept=".json,application/json" /></label>
+        <label class="file" id="lblAudio">audio (wav/mp4)<input type="file" id="fAudio"
+                accept="audio/*,video/mp4,.wav,.mp4" /></label>
+    </div>
+</header>
+
+<div id="empty">load <b style="color:var(--hot)">&nbsp;test.peaks.json&nbsp;</b> to draw · <b
+        style="color:var(--hot)">&nbsp;test.wav&nbsp;</b> for playback</div>
+<canvas id="tl" style="display:none"></canvas>
+
+<div class="controls" id="ctls" style="display:none">
+    <div class="ctl">
+        <div class="row"><span class="k">threshold</span><span class="v" id="vThresh">4</span></div>
+        <input type="range" id="sThresh" min="1" max="64" value="4" />
+    </div>
+    <div class="ctl">
+        <div class="row"><span class="k">min transmission</span><span class="v" id="vMin">300ms</span></div>
+        <input type="range" id="sMin" min="0" max="1500" step="50" value="300" />
+    </div>
+    <div class="ctl">
+        <div class="row"><span class="k">bridge gap</span><span class="v" id="vBridge">500ms</span></div>
+        <input type="range" id="sBridge" min="0" max="2000" step="50" value="500" />
+    </div>
+</div>
+
+<div>
+    <!-- audio src 100.101.141.8:8889/scanner-rtc -->
+    <audio id="a" controls></audio>
+</div>
+
+<div class="stats" id="stats" style="display:none">
+    <div class="stat">
+        <div class="n" id="stRaw">–</div>
+        <div class="l">raw occ</div>
+    </div>
+    <div class="stat">
+        <div class="n" id="stDeb">–</div>
+        <div class="l">debounced occ</div>
+    </div>
+    <div class="stat">
+        <div class="n" id="stTx">–</div>
+        <div class="l">transmissions</div>
+    </div>
+    <div class="stat">
+        <div class="n" id="stAvg">–</div>
+        <div class="l">avg length</div>
+    </div>
+    <div class="stat">
+        <div class="n" id="stActive">–</div>
+        <div class="l">active</div>
+    </div>
+    <div class="stat">
+        <div class="n" id="stPeak">–</div>
+        <div class="l">data peak</div>
+    </div>
+</div>
+
+<div id="hint">
+    <kbd>scroll</kbd> zoom &nbsp; <kbd>drag</kbd> pan &nbsp; <kbd>click</kbd> play from here &nbsp;
+    <kbd>n</kbd> next transmission &nbsp; <kbd>b</kbd> prev &nbsp; <kbd>space</kbd> play/pause &nbsp; <kbd>f</kbd> fit
+</div>
+
+
+<script type="module">
+    const cv = document.getElementById("tl");
+    const cx = cv.getContext("2d");
+    const a = document.getElementById("a");
+    const $ = (id) => document.getElementById(id);
+
+    // --- state --------------------------------------------------------------
+    let peaks = null;        // parsed audiowaveform json
+    let cols = [];           // per-column max-abs envelope
+    let secPerCol = 0, bits = 8, fullScale = 128, totalSec = 0;
+    let tx = [];             // detected [startCol, endCol]
+    let inTx = null;         // Uint8 mask, col -> 1 if inside a kept transmission
+
+    // viewport in COLUMN space
+    let vc0 = 0, vc1 = 1;
+
+    const css = (n) => getComputedStyle(document.body).getPropertyValue(n).trim();
+    const W = () => cv.width / devicePixelRatio;
+    const H = () => cv.height / devicePixelRatio;
+    const xOf = (c) => ((c - vc0) / (vc1 - vc0)) * W();
+    const cOf = (x) => vc0 + (x / W()) * (vc1 - vc0);
+
+    function fit() {
+        const r = cv.getBoundingClientRect();
+        cv.width = r.width * devicePixelRatio;
+        cv.height = r.height * devicePixelRatio;
+        cx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        draw();
+    }
+    addEventListener("resize", () => { if (peaks) fit(); });
+
+    // --- loading ------------------------------------------------------------
+    $("fPeaks").addEventListener("change", (e) => {
+        const f = e.target.files[0]; if (!f) return;
+        const rd = new FileReader();
+        rd.onload = () => {
+            try { peaks = JSON.parse(rd.result); } catch (err) { alert("bad json: " + err.message); return; }
+            ingest(f.name);
+        };
+        rd.readAsText(f);
+    });
+
+    $("fAudio").addEventListener("change", (e) => {
+        const f = e.target.files[0]; if (!f) return;
+        a.src = URL.createObjectURL(f);
+        const l = $("lblAudio"); l.classList.add("set"); l.firstChild.textContent = f.name + " ";
+    });
+
+    function ingest(name) {
+        const d = peaks.data;
+        bits = peaks.bits || 8;
+        fullScale = Math.pow(2, bits - 1);           // 8-bit -> 128, 16-bit -> 32768
+        secPerCol = peaks.samples_per_pixel / peaks.sample_rate;
+
+        // interleaved min,max -> single rectified envelope per column
+        cols = new Array(d.length >> 1);
+        let peak = 0;
+        for (let i = 0, j = 0; i < d.length; i += 2, j++) {
+            const v = Math.max(Math.abs(d[i]), Math.abs(d[i + 1]));
+            cols[j] = v; if (v > peak) peak = v;
+        }
+        totalSec = cols.length * secPerCol;
+
+        // scale the threshold slider to this file's bit depth
+        const scale = fullScale / 128;
+        const s = $("sThresh");
+        s.max = Math.round(64 * scale);
+        s.value = Math.round(4 * scale);
+
+        $("stPeak").textContent = peak + "/" + fullScale;
+
+        vc0 = 0; vc1 = cols.length;
+        const l = $("lblPeaks"); l.classList.add("set"); l.firstChild.textContent = name + " ";
+        $("empty").style.display = "none";
+        cv.style.display = "block";
+        $("ctls").style.display = "flex";
+        $("stats").style.display = "flex";
+        fit();
+        recompute();
+    }
+
+    // --- detection (port of the debounce logic) -----------------------------
+    function recompute() {
+        if (!peaks) return;
+        const thresh = +$("sThresh").value;
+        const minTx = +$("sMin").value / 1000;
+        const bridge = +$("sBridge").value / 1000;
+        $("vThresh").textContent = thresh;
+        $("vMin").textContent = $("sMin").value + "ms";
+        $("vBridge").textContent = $("sBridge").value + "ms";
+
+        // runs of hot columns
+        const runs = [];
+        let i = 0, rawHot = 0;
+        while (i < cols.length) {
+            if (cols[i] > thresh) {
+                let j = i; while (j < cols.length && cols[j] > thresh) j++;
+                runs.push([i, j]); rawHot += (j - i); i = j;
+            } else i++;
+        }
+
+        // bridge tiny gaps
+        const bridgeCols = bridge / secPerCol;
+        const merged = [];
+        for (const r of runs) {
+            if (merged.length && (r[0] - merged[merged.length - 1][1]) < bridgeCols)
+                merged[merged.length - 1][1] = r[1];
+            else merged.push([r[0], r[1]]);
+        }
+
+        // drop sub-minimum blips
+        const minCols = minTx / secPerCol;
+        tx = merged.filter((r) => (r[1] - r[0]) >= minCols);
+
+        // build fast lookup mask for coloring
+        inTx = new Uint8Array(cols.length);
+        let active = 0;
+        for (const [s, e] of tx) { for (let k = s; k < e; k++) inTx[k] = 1; active += (e - s); }
+
+        // stats
+        const pct = (x) => (x / cols.length * 100).toFixed(1) + "%";
+        $("stRaw").textContent = pct(rawHot);
+        $("stDeb").textContent = pct(active);
+        $("stTx").textContent = tx.length;
+        $("stActive").textContent = (active * secPerCol).toFixed(0) + "s";
+        $("stAvg").textContent = tx.length ? (active * secPerCol / tx.length).toFixed(1) + "s" : "–";
+
+        draw();
+    }
+
+    ["sThresh", "sMin", "sBridge"].forEach((id) => $(id).addEventListener("input", recompute));
+
+    // --- render -------------------------------------------------------------
+    function draw() {
+        if (!peaks) return;
+        const w = W(), h = H(), mid = h * 0.5, lane = 8;
+        cx.clearRect(0, 0, w, h);
+
+        // transmission lane along the top: solid amber blocks
+        cx.fillStyle = css("--hot");
+        for (const [s, e] of tx) {
+            const x0 = xOf(s), x1 = xOf(e);
+            if (x1 < 0 || x0 > w) continue;
+            cx.fillRect(x0, 0, Math.max(1, x1 - x0), lane);
+        }
+
+        // waveform: one bar per screen pixel, aggregating the cols under it.
+        // dim when it's just noise/floor, hot amber when inside a transmission.
+        const hot = css("--hot"), warm = css("--warm");
+        for (let px = 0; px < w; px++) {
+            const cA = cOf(px), cB = cOf(px + 1);
+            let lo = Math.max(0, Math.floor(cA)), hi = Math.min(cols.length, Math.ceil(cB));
+            if (hi <= lo) continue;
+            let m = 0, anyTx = false;
+            for (let c = lo; c < hi; c++) { if (cols[c] > m) m = cols[c]; if (inTx[c]) anyTx = true; }
+            const n = m / fullScale;                       // 0..1
+            const barTop = Math.pow(n, 0.7) * (mid - lane - 2);
+            cx.fillStyle = anyTx ? hot : warm;
+            cx.fillRect(px, mid - barTop, 1, barTop * 2);
+        }
+
+        // center line
+        cx.fillStyle = css("--gap");
+        cx.fillRect(0, mid, w, 1);
+
+        // time axis
+        drawAxis(w, h);
+
+        // playhead
+        if (a.src && a.duration) {
+            const pc = a.currentTime / secPerCol;
+            if (pc >= vc0 && pc <= vc1) {
+                cx.fillStyle = css("--head");
+                cx.fillRect(xOf(pc) - 1, 0, 2, h);
+            }
+        }
+
+        const spanSec = (vc1 - vc0) * secPerCol;
+        $("view").textContent = `${fmtDur(spanSec)} shown of ${fmtDur(totalSec)}`;
+    }
+
+    function drawAxis(w, h) {
+        const spanSec = (vc1 - vc0) * secPerCol;
+        // choose a step giving labels ~90px apart
+        const steps = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900];
+        const target = spanSec * (90 / w);
+        const step = steps.find((s) => s >= target) || 900;
+        cx.fillStyle = css("--dim");
+        cx.font = "11px ui-monospace, monospace";
+        const startSec = Math.ceil(vc0 * secPerCol / step) * step;
+        for (let t = startSec; t < vc1 * secPerCol; t += step) {
+            const x = xOf(t / secPerCol);
+            cx.fillRect(x, h - 16, 1, 5);
+            cx.fillText(mmss(t), x + 3, h - 4);
+        }
+    }
+
+    const p2 = (n) => String(n).padStart(2, "0");
+    const mmss = (s) => `${p2(Math.floor(s / 60))}:${p2(Math.floor(s % 60))}`;
+    function fmtDur(s) {
+        if (s >= 60) return `${Math.floor(s / 60)}m${p2(Math.round(s % 60))}s`;
+        return `${s.toFixed(1)}s`;
+    }
+
+    // --- interaction --------------------------------------------------------
+    cv.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        const r = cv.getBoundingClientRect();
+        const frac = (e.clientX - r.left) / r.width;
+        const anchor = vc0 + frac * (vc1 - vc0);
+        const k = Math.exp(e.deltaY * 0.0015);
+        let span = (vc1 - vc0) * k;
+        span = Math.max(20, Math.min(cols.length, span));   // floor ~ 20 cols (~0.1s)
+        vc0 = anchor - frac * span;
+        vc1 = vc0 + span;
+        clampView();
+        draw();
+    }, { passive: false });
+
+    let drag = null;
+    cv.addEventListener("pointerdown", (e) => {
+        drag = { x: e.clientX, vc0, vc1, moved: false };
+        cv.setPointerCapture(e.pointerId);
+    });
+    cv.addEventListener("pointermove", (e) => {
+        if (!drag) return;
+        const dx = e.clientX - drag.x;
+        if (Math.abs(dx) > 3) drag.moved = true;
+        const dc = (dx / cv.getBoundingClientRect().width) * (drag.vc1 - drag.vc0);
+        vc0 = drag.vc0 - dc; vc1 = drag.vc1 - dc;
+        clampView(); draw();
+    });
+    cv.addEventListener("pointerup", (e) => {
+        const wasDrag = drag?.moved; drag = null;
+        if (wasDrag) return;
+        const r = cv.getBoundingClientRect();
+        const c = cOf(((e.clientX - r.left) / r.width) * W());
+        seekTo(c * secPerCol);
+    });
+
+    function clampView() {
+        const span = vc1 - vc0;
+        if (span >= cols.length) { vc0 = 0; vc1 = cols.length; return; }
+        if (vc0 < 0) { vc0 = 0; vc1 = span; }
+        if (vc1 > cols.length) { vc1 = cols.length; vc0 = cols.length - span; }
+    }
+
+    function seekTo(sec) {
+        if (!a.src) { alert("load an audio file to play"); return; }
+        a.currentTime = Math.max(0, Math.min(sec, a.duration || sec));
+        a.play().catch(() => { });
+    }
+
+    a.ontimeupdate = () => {
+        $("clock").textContent = mmss(a.currentTime) + " / " + mmss(a.duration || 0);
+        draw();
+    };
+
+    // keyboard: transmission-hop, the payoff of having tx boundaries
+    addEventListener("keydown", (e) => {
+        if (!peaks) return;
+        if (e.key === "n" || e.key === "b") {
+            if (!tx.length) return;
+            const cur = (a.currentTime || 0) / secPerCol;
+            let target;
+            if (e.key === "n") target = tx.find((r) => r[0] > cur + 2);
+            else { const before = tx.filter((r) => r[0] < cur - 2); target = before[before.length - 1]; }
+            if (target) { centerOn(target[0]); seekTo(target[0] * secPerCol); }
+        } else if (e.key === " ") {
+            e.preventDefault();
+            a.paused ? a.play().catch(() => { }) : a.pause();
+        } else if (e.key === "f") {
+            vc0 = 0; vc1 = cols.length; draw();
+        }
+    });
+
+    function centerOn(c) {
+        const span = vc1 - vc0;
+        vc0 = c - span / 2; vc1 = vc0 + span; clampView(); draw();
+    }
+</script>

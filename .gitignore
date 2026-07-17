@@ -4,3 +4,4 @@ live-levels/
 *.log
 package-lock.json
 *.mp*
+AGENTS.md
